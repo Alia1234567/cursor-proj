@@ -1,0 +1,20 @@
+# PostgreSQL for Calendar Dashboard
+# Run: docker-compose up -d
+# Uses port 5433 to avoid conflict with other PostgreSQL on 5432
+# DATABASE_URL: postgresql://postgres:postgres@localhost:5433/calendar_dashboard
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: calendar-dashboard-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: calendar_dashboard
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

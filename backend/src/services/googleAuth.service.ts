@@ -1,6 +1,6 @@
-import {OAuth2Client} from 'google-auth-library';
-import {google} from 'googleapis';
-import {getTokens, storeTokens, removeTokens} from '../utils/tokenStorage.util';
+import { OAuth2Client } from 'google-auth-library';
+import { google } from 'googleapis';
+import { getTokens, storeTokens, removeTokens } from './tokenStorage';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -59,16 +59,16 @@ export async function getTokensFromCode(code: string): Promise<{email: string; t
             throw new Error('Unable to retrieve user email from Google');
         }
 
-        // Store tokens in memory (keyed by email)
-        storeTokens(email, {
+        // Store tokens in database
+        await storeTokens(email, {
             access_token: tokens.access_token!,
             refresh_token: tokens.refresh_token!,
             expiry_date: tokens.expiry_date || Date.now() + 3600 * 1000,
             scope: tokens.scope || '',
             token_type: tokens.token_type || 'Bearer',
-        });
+        }, data.name || undefined);
 
-        return {email, tokens};
+        return { email, tokens };
     } catch (error) {
         console.error('Error exchanging code for tokens:', error);
         throw error;
@@ -82,7 +82,7 @@ export async function getTokensFromCode(code: string): Promise<{email: string; t
  * @returns Authenticated OAuth2Client or null if tokens not found
  */
 export async function getAuthenticatedClient(email: string): Promise<OAuth2Client | null> {
-    const storedTokens = getTokens(email);
+    const storedTokens = await getTokens(email);
 
     if (!storedTokens) {
         return null;
@@ -107,8 +107,8 @@ export async function getAuthenticatedClient(email: string): Promise<OAuth2Clien
         try {
             const {credentials} = await client.refreshAccessToken();
 
-            // Update stored tokens
-            storeTokens(email, {
+            // Update stored tokens in database
+            await storeTokens(email, {
                 access_token: credentials.access_token!,
                 refresh_token: credentials.refresh_token || storedTokens.refresh_token,
                 expiry_date: credentials.expiry_date || Date.now() + 3600 * 1000,
@@ -119,8 +119,8 @@ export async function getAuthenticatedClient(email: string): Promise<OAuth2Clien
             client.setCredentials(credentials);
         } catch (error) {
             console.error('Error refreshing token:', error);
-            // Remove invalid tokens
-            removeTokens(email);
+            // Remove invalid tokens from database
+            await removeTokens(email);
             return null;
         }
     }
@@ -132,8 +132,8 @@ export async function getAuthenticatedClient(email: string): Promise<OAuth2Clien
  * Logout user by removing stored tokens
  * @param email - User email
  */
-export function logoutUser(email: string): void {
-    removeTokens(email);
+export async function logoutUser(email: string): Promise<void> {
+    await removeTokens(email);
 }
 
 

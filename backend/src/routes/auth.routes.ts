@@ -83,8 +83,8 @@ router.post(
     const email = req.user?.email;
 
     if (email) {
-      // Remove Google tokens from storage
-      logoutUser(email);
+      // Remove Google tokens from database
+      await logoutUser(email);
     }
 
     // Clear JWT cookie

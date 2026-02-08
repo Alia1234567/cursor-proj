@@ -28,6 +28,7 @@ A production-ready web application that securely connects to Google Calendar, fe
 **Backend:**
 - Node.js with Express
 - TypeScript
+- Prisma ORM with PostgreSQL
 - Google APIs (googleapis)
 - JWT for session management
 - Cookie-based authentication
@@ -50,7 +51,7 @@ sequenceDiagram
     Google->>Backend: Redirect with authorization code
     Backend->>Google: Exchange code for tokens
     Google->>Backend: Return access & refresh tokens
-    Backend->>Backend: Store tokens (in-memory)
+    Backend->>Backend: Store tokens (PostgreSQL)
     Backend->>Backend: Generate JWT
     Backend->>Frontend: Set JWT in HttpOnly cookie
     Frontend->>Frontend: Redirect to dashboard
@@ -99,15 +100,19 @@ calendar-dashboard/
 │   │   ├── middleware/
 │   │   │   ├── auth.middleware.ts      # JWT verification
 │   │   │   └── errorHandler.middleware.ts
+│   │   ├── lib/
+│   │   │   └── prisma.ts               # Prisma client
 │   │   ├── services/
 │   │   │   ├── googleAuth.service.ts   # OAuth logic
 │   │   │   ├── calendar.service.ts     # Calendar API client
-│   │   │   └── statsAggregator.service.ts # Statistics calculation
+│   │   │   ├── statsAggregator.service.ts # Statistics calculation
+│   │   │   └── tokenStorage.service.ts # Token storage (PostgreSQL)
 │   │   ├── utils/
-│   │   │   ├── jwt.util.ts             # JWT generation/verification
-│   │   │   └── tokenStorage.util.ts    # Token storage (in-memory)
+│   │   │   └── jwt.util.ts             # JWT generation/verification
 │   │   ├── app.ts                      # Express app setup
 │   │   └── server.ts                   # Server entry point
+│   ├── prisma/
+│   │   └── schema.prisma               # Database schema
 │   ├── package.json
 │   └── tsconfig.json
 └── README.md
@@ -118,10 +123,25 @@ calendar-dashboard/
 ### Prerequisites
 
 - Node.js 18+ and npm
+- PostgreSQL database
 - Google Cloud Project with Calendar API enabled
 - Google OAuth 2.0 credentials
 
-### 1. Google Cloud Setup
+### 1. PostgreSQL Setup
+
+Create a PostgreSQL database:
+
+```bash
+# Using psql or any PostgreSQL client
+createdb calendar_dashboard
+
+# Or with Docker
+docker run -d --name postgres-calendar -e POSTGRES_PASSWORD=password -e POSTGRES_DB=calendar_dashboard -p 5432:5432 postgres:15
+```
+
+Your `DATABASE_URL` format: `postgresql://USER:PASSWORD@localhost:5432/calendar_dashboard`
+
+### 2. Google Cloud Setup
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project or select existing one
@@ -138,7 +158,7 @@ calendar-dashboard/
      - `https://yourdomain.com/auth/callback` (production)
    - Save the **Client ID** and **Client Secret**
 
-### 2. Backend Setup
+### 3. Backend Setup
 
 ```bash
 cd backend
@@ -146,16 +166,19 @@ cd backend
 # Install dependencies
 npm install
 
-# Create .env file
-cp .env.example .env
+# Create .env file (copy from env.example)
+# Edit .env and add:
+# - GOOGLE_CLIENT_ID
+# - GOOGLE_CLIENT_SECRET
+# - JWT_SECRET
+# - DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/calendar_dashboard
+# - GOOGLE_REDIRECT_URI=http://localhost:5000/auth/callback
+# - FRONTEND_URL=http://localhost:5173
+# - BACKEND_PORT=5000
 
-# Edit .env and add your credentials:
-# GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-# GOOGLE_CLIENT_SECRET=your-client-secret
-# JWT_SECRET=your-random-secret-key
-# GOOGLE_REDIRECT_URI=http://localhost:5000/auth/callback
-# FRONTEND_URL=http://localhost:5173
-# BACKEND_PORT=5000
+# Create database tables
+npm run db:push
+# Or for migrations: npm run db:migrate
 
 # Run in development mode
 npm run dev
@@ -165,7 +188,7 @@ npm run build
 npm start
 ```
 
-### 3. Frontend Setup
+### 4. Frontend Setup
 
 ```bash
 cd frontend
@@ -208,8 +231,8 @@ npm run preview
    - Credentials enabled for cookie support
 
 3. **Token Storage**
-   - Google OAuth tokens stored server-side only
-   - In-memory storage (for demo) - use database in production
+   - Google OAuth tokens stored server-side only in PostgreSQL
+   - Tokens persist across server restarts
 
 ### Why Frontend Never Talks Directly to Google API?
 
@@ -266,6 +289,7 @@ npm run preview
    GOOGLE_CLIENT_ID=your-client-id
    GOOGLE_CLIENT_SECRET=your-client-secret
    JWT_SECRET=your-jwt-secret
+   DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
    GOOGLE_REDIRECT_URI=https://your-backend.com/auth/callback
    FRONTEND_URL=https://your-frontend.com
    NODE_ENV=production
@@ -290,7 +314,7 @@ npm run preview
 - Update Google OAuth redirect URI to production URL
 - Ensure HTTPS is enabled (required for Secure cookies)
 - Use strong, random secrets in production
-- Consider using a database (Redis/MongoDB) for token storage instead of in-memory
+- PostgreSQL is used for OAuth token storage (persistent across restarts)
 
 ## 🐛 Troubleshooting
 

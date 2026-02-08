@@ -1,0 +1,59 @@
+// Prisma schema for PostgreSQL database
+// Stores users and their Google OAuth tokens
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model - stores basic user info from Google
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One user has one set of OAuth tokens
+  oauthToken    OAuthToken?
+  // User's calendar events (synced from Google Calendar)
+  calendarEvents CalendarEvent[]
+}
+
+// OAuth tokens for Google Calendar API access
+// Stored securely in database (never exposed to frontend)
+model OAuthToken {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  accessToken  String
+  refreshToken String
+  expiryDate   DateTime // When access token expires
+  scope        String?
+  tokenType    String   @default("Bearer")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Calendar events synced from Google Calendar - stored in DB
+model CalendarEvent {
+  id            String   @id @default(cuid())
+  userId        String
+  googleEventId String   // Google's event ID
+  summary       String
+  start         DateTime
+  end           DateTime
+  duration      Int      // milliseconds
+  attendees     String[] // array of attendee emails
+  isAllDay      Boolean  @default(false)
+  syncedAt      DateTime @default(now()) // when we last synced this event
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, googleEventId, start]) // prevent duplicates for same event instance
+}

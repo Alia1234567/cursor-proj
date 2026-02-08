@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { fetchCalendarEvents } from '../services/calendar.service';
 import { aggregateStats } from '../services/statsAggregator.service';
+import { saveEventsToDb } from '../services/eventStorage.service';
 import { authMiddleware, AuthRequest } from '../middleware/auth.middleware';
 import { asyncHandler } from '../middleware/errorHandler.middleware';
 
@@ -86,6 +87,14 @@ router.get(
       // Fetch events from Google Calendar
       const events = await fetchCalendarEvents(email, startDate, endDate);
 
+      // Store events in database (when using PostgreSQL)
+      let savedCount = 0;
+      try {
+        savedCount = await saveEventsToDb(email, events);
+      } catch (dbError) {
+        console.warn('Could not save events to DB (may be using in-memory):', dbError);
+      }
+
       // Aggregate statistics
       const stats = aggregateStats(events);
 
@@ -98,6 +107,7 @@ router.get(
             end: endDate,
           },
           eventsProcessed: events.length,
+          eventsSavedToDb: savedCount,
         },
       });
     } catch (error: any) {
